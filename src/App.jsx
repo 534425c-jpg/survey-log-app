@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType } from "docx";
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  ImageRun,
+  AlignmentType,
+} from "docx";
 
 const emptyForm = {
   date: new Date().toISOString().slice(0, 10),
@@ -29,25 +36,40 @@ export default function App() {
 
   const getGps = () =>
     new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve("");
+      if (!navigator.geolocation) {
+        alert("이 기기에서는 위치 기능을 사용할 수 없습니다.");
+        return resolve("");
+      }
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          resolve(`N ${pos.coords.latitude.toFixed(6)}, E ${pos.coords.longitude.toFixed(6)}`);
+          const lat = pos.coords.latitude.toFixed(6);
+          const lng = pos.coords.longitude.toFixed(6);
+          resolve(`N ${lat}, E ${lng}`);
         },
-        () => resolve(""),
-        { enableHighAccuracy: true }
+        () => {
+          alert("위치 권한을 허용해야 사진 좌표가 저장됩니다.");
+          resolve("");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
       );
     });
 
   const getCurrentGps = async () => {
     const gps = await getGps();
-    if (!gps) return alert("위치 권한을 허용해줘.");
-    update("gps", gps);
+    if (gps) update("gps", gps);
   };
 
   const handlePhotos = async (e) => {
     const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
     const gps = await getGps();
+    const time = new Date().toLocaleString("ko-KR");
 
     const photos = await Promise.all(
       files.map(async (file) => ({
@@ -55,7 +77,7 @@ export default function App() {
         url: URL.createObjectURL(file),
         dataUrl: await fileToDataUrl(file),
         gps,
-        time: new Date().toLocaleString("ko-KR"),
+        time,
       }))
     );
 
@@ -80,7 +102,13 @@ export default function App() {
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
-              children: [new TextRun({ text: "유적조사일지", bold: true, size: 36 })],
+              children: [
+                new TextRun({
+                  text: "유적조사일지",
+                  bold: true,
+                  size: 36,
+                }),
+              ],
             }),
             new Paragraph(""),
             new Paragraph(`일자: ${koreanDate(form.date)}`),
@@ -89,7 +117,9 @@ export default function App() {
             new Paragraph(`조사단: ${form.team}`),
             new Paragraph(`GPS: ${form.gps}`),
             new Paragraph(""),
-            new Paragraph({ children: [new TextRun({ text: "조사내용", bold: true })] }),
+            new Paragraph({
+              children: [new TextRun({ text: "조사내용", bold: true })],
+            }),
             new Paragraph(form.contents || ""),
             new Paragraph(""),
             new Paragraph(`인부: ${form.labor}`),
@@ -97,13 +127,23 @@ export default function App() {
             new Paragraph(`기타사항: ${form.note}`),
             new Paragraph(""),
             ...form.photos.flatMap((p, i) => [
-              new Paragraph({ children: [new TextRun({ text: `사진 ${i + 1}. ${p.name}`, bold: true })] }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `사진 ${i + 1}. ${p.name}`,
+                    bold: true,
+                  }),
+                ],
+              }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
                   new ImageRun({
                     data: dataUrlToUint8Array(p.dataUrl),
-                    transformation: { width: 500, height: 350 },
+                    transformation: {
+                      width: 500,
+                      height: 350,
+                    },
                   }),
                 ],
               }),
@@ -120,7 +160,9 @@ export default function App() {
     downloadBlob(blob, `${form.siteName || "유적조사일지"}.docx`);
   };
 
-  const downloadPdf = () => window.print();
+  const downloadPdf = () => {
+    window.print();
+  };
 
   return (
     <div style={styles.page}>
@@ -132,51 +174,104 @@ export default function App() {
         <section style={styles.card}>
           <div style={styles.grid3}>
             <Field label="일자">
-              <input style={styles.input} type="date" value={form.date} onChange={(e) => update("date", e.target.value)} />
+              <input
+                style={styles.input}
+                type="date"
+                value={form.date}
+                onChange={(e) => update("date", e.target.value)}
+              />
             </Field>
 
             <Field label="날씨">
-              <input style={styles.input} value={form.weather} onChange={(e) => update("weather", e.target.value)} />
+              <input
+                style={styles.input}
+                value={form.weather}
+                onChange={(e) => update("weather", e.target.value)}
+              />
             </Field>
 
             <Field label="GPS 좌표">
               <div style={styles.row}>
-                <input style={styles.input} value={form.gps} onChange={(e) => update("gps", e.target.value)} placeholder="N 35..., E 126..." />
-                <button style={styles.smallButton} onClick={getCurrentGps}>위치</button>
+                <input
+                  style={styles.input}
+                  value={form.gps}
+                  onChange={(e) => update("gps", e.target.value)}
+                  placeholder="N 35..., E 126..."
+                />
+                <button style={styles.smallButton} onClick={getCurrentGps}>
+                  위치
+                </button>
               </div>
             </Field>
           </div>
 
           <Field label="유적명">
-            <input style={styles.input} value={form.siteName} onChange={(e) => update("siteName", e.target.value)} placeholder="유적명 입력" />
+            <input
+              style={styles.input}
+              value={form.siteName}
+              onChange={(e) => update("siteName", e.target.value)}
+              placeholder="유적명 입력"
+            />
           </Field>
 
           <Field label="조사단">
-            <input style={styles.input} value={form.team} onChange={(e) => update("team", e.target.value)} placeholder="예: 박철원, 오정훈, 한정훈, 공종찬, 오세찬" />
+            <input
+              style={styles.input}
+              value={form.team}
+              onChange={(e) => update("team", e.target.value)}
+              placeholder="예: 박철원, 오정훈, 한정훈, 공종찬, 오세찬"
+            />
           </Field>
 
           <Field label="조사내용">
-            <textarea style={styles.textarea} value={form.contents} onChange={(e) => update("contents", e.target.value)} placeholder="조사내용 입력" />
+            <textarea
+              style={styles.textarea}
+              value={form.contents}
+              onChange={(e) => update("contents", e.target.value)}
+              placeholder="조사내용 입력"
+            />
           </Field>
 
           <div style={styles.grid3}>
             <Field label="인부">
-              <input style={styles.input} value={form.labor} onChange={(e) => update("labor", e.target.value)} />
+              <input
+                style={styles.input}
+                value={form.labor}
+                onChange={(e) => update("labor", e.target.value)}
+              />
             </Field>
 
             <Field label="장비">
-              <input style={styles.input} value={form.equipment} onChange={(e) => update("equipment", e.target.value)} />
+              <input
+                style={styles.input}
+                value={form.equipment}
+                onChange={(e) => update("equipment", e.target.value)}
+              />
             </Field>
 
             <Field label="기타사항">
-              <input style={styles.input} value={form.note} onChange={(e) => update("note", e.target.value)} />
+              <input
+                style={styles.input}
+                value={form.note}
+                onChange={(e) => update("note", e.target.value)}
+              />
             </Field>
           </div>
         </section>
 
         <section style={styles.card}>
           <h2 style={styles.sectionTitle}>사진 첨부</h2>
-          <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotos} />
+          <p style={styles.helpText}>
+            사진을 찍거나 첨부하면 현재 GPS 좌표와 시간이 사진별로 저장됩니다.
+          </p>
+
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            onChange={handlePhotos}
+          />
 
           <div style={styles.photoGrid}>
             {form.photos.map((p, i) => (
@@ -184,8 +279,12 @@ export default function App() {
                 <img src={p.url} alt={p.name} style={styles.photo} />
                 <div style={styles.photoText}>{p.name}</div>
                 <div style={styles.photoText}>촬영: {p.time}</div>
-                <div style={styles.photoText}>좌표: {p.gps || "없음"}</div>
-                <button style={styles.deleteButton} onClick={() => removePhoto(i)}>삭제</button>
+                <div style={styles.photoText}>
+                  좌표: {p.gps || "위치 정보 없음"}
+                </div>
+                <button style={styles.deleteButton} onClick={() => removePhoto(i)}>
+                  삭제
+                </button>
               </div>
             ))}
           </div>
@@ -193,8 +292,12 @@ export default function App() {
 
         <section style={styles.card}>
           <div style={styles.buttonRow}>
-            <button style={styles.mainButton} onClick={downloadDocx}>DOCX 출력</button>
-            <button style={styles.mainButton} onClick={downloadPdf}>PDF 출력</button>
+            <button style={styles.mainButton} onClick={downloadDocx}>
+              DOCX 출력
+            </button>
+            <button style={styles.mainButton} onClick={downloadPdf}>
+              PDF 출력
+            </button>
           </div>
 
           <h2 style={styles.sectionTitle}>미리보기</h2>
@@ -210,7 +313,9 @@ ${form.contents}
 
 인부: ${form.labor}
 장비: ${form.equipment}
-기타사항: ${form.note}`}
+기타사항: ${form.note}
+
+사진 수: ${form.photos.length}장`}
           </pre>
         </section>
       </div>
@@ -240,7 +345,9 @@ function dataUrlToUint8Array(dataUrl) {
   const base64 = dataUrl.split(",")[1];
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
   return bytes;
 }
 
@@ -280,8 +387,13 @@ const styles = {
   },
   sectionTitle: {
     marginTop: 0,
-    marginBottom: 14,
+    marginBottom: 8,
     fontSize: 22,
+  },
+  helpText: {
+    color: "#64748b",
+    fontSize: 14,
+    marginBottom: 14,
   },
   grid3: {
     display: "grid",
@@ -407,6 +519,9 @@ const printStyle = `
 @media (max-width: 760px) {
   h1 {
     font-size: 32px !important;
+  }
+  div {
+    max-width: 100%;
   }
 }
 `;
